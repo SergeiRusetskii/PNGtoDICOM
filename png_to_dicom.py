@@ -65,7 +65,7 @@ def png_to_dicom(png_path, dicom_path):
 
     # Create a new DICOM dataset
     file_meta = pydicom.Dataset()
-    file_meta.MediaStorageSOPClassUID = '1.2.840.10008.5.1.4.1.1.7'  # Secondary Capture Image Storage
+    file_meta.MediaStorageSOPClassUID = '1.2.840.10008.5.1.4.1.1.2'  # CT Image Storage
     file_meta.MediaStorageSOPInstanceUID = generate_uid()
     file_meta.TransferSyntaxUID = pydicom.uid.ExplicitVRLittleEndian
     file_meta.ImplementationClassUID = generate_uid()
@@ -96,7 +96,8 @@ def png_to_dicom(png_path, dicom_path):
     # Set series information (dummy values)
     ds.SeriesInstanceUID = generate_uid()
     ds.SeriesNumber = "1"
-    ds.Modality = "SC"  # Secondary Capture
+    ds.Modality = "CT"  # Computed Tomography
+    ds.SeriesDescription = "PNG to CT Conversion"
 
     # Set instance information
     ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
@@ -116,6 +117,39 @@ def png_to_dicom(png_path, dicom_path):
     # For color images, set planar configuration
     if is_color:
         ds.PlanarConfiguration = 0  # Color-by-pixel (R1G1B1 R2G2B2 ...)
+
+    # CT-specific parameters
+    ds.SliceThickness = "1.0"  # Slice thickness in mm
+    ds.KVP = "120"  # Peak kilovoltage output
+    ds.DataCollectionDiameter = "500"  # Data collection diameter in mm
+
+    # Image position and orientation (patient coordinate system)
+    # ImagePositionPatient: x, y, z coordinates of upper left corner
+    ds.ImagePositionPatient = [0.0, 0.0, 0.0]
+    # ImageOrientationPatient: direction cosines of first row and first column
+    ds.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+
+    # Pixel spacing: physical distance between pixel centers (row spacing, column spacing)
+    ds.PixelSpacing = [1.0, 1.0]  # 1mm x 1mm pixels
+
+    # Slice location
+    ds.SliceLocation = "0.0"
+
+    # Rescale parameters for Hounsfield Units (HU)
+    # HU = pixel_value * RescaleSlope + RescaleIntercept
+    ds.RescaleIntercept = "-1024"  # Standard CT intercept
+    ds.RescaleSlope = "1"
+    ds.RescaleType = "HU"
+
+    # Window settings for display
+    # Standard soft tissue window
+    ds.WindowCenter = "40"  # Center of window in HU
+    ds.WindowWidth = "400"  # Width of window in HU
+
+    # Equipment information
+    ds.Manufacturer = "PNG to DICOM Converter"
+    ds.ManufacturerModelName = "PNGtoDICOM v1.0"
+    ds.SoftwareVersions = "1.0"
 
     # Set pixel data (uncompressed)
     ds.PixelData = pixel_data.tobytes()

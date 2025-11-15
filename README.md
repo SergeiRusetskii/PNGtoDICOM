@@ -34,8 +34,17 @@ Currently uses hardcoded filenames:
 - Executable (.exe) file for Windows with parameter support
 
 ## Technical Details
-- DICOM SOP Class: Secondary Capture Image Storage (1.2.840.10008.5.1.4.1.1.7)
-- Modality: SC (Secondary Capture)
+- DICOM SOP Class: CT Image Storage (1.2.840.10008.5.1.4.1.1.2)
+- Modality: CT (Computed Tomography)
 - Transfer Syntax: Explicit VR Little Endian
 - Pixel data: Uncompressed, 8-bit
 - Photometric Interpretation: RGB for color, MONOCHROME2 for grayscale
+
+## CT-Specific Parameters
+The converter adds standard CT DICOM parameters to simulate a single CT slice:
+- Slice Thickness: 1.0 mm
+- KVP (Peak Kilovoltage): 120
+- Pixel Spacing: 1.0 x 1.0 mm
+- Image Position/Orientation: Standard axial orientation
+- Rescale Intercept/Slope: Configured for Hounsfield Units (HU)
+- Window Center/Width: 40/400 (soft tissue window)
