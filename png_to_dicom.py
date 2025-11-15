@@ -91,6 +91,10 @@ def png_to_dicom(png_path, dicom_path):
     ds.Modality = "CT"  # Computed Tomography
     ds.SeriesDescription = "PNG to CT Conversion"
 
+    # Frame of Reference (required for CT Image Storage)
+    ds.FrameOfReferenceUID = generate_uid()
+    ds.PositionReferenceIndicator = ""  # Empty string (no specific anatomical reference)
+
     # Set instance information
     ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
     ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
