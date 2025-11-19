@@ -4,6 +4,38 @@ PNG to DICOM Converter
 Converts PNG images to uncompressed DICOM format
 """
 
+# Disable pydicom's optional encoder plugins to avoid PyInstaller import issues
+import os
+import sys
+
+# Mock the problematic encoder modules before pydicom imports them
+# This prevents ImportError when these optional encoders aren't available
+class MockEncoder:
+    """Mock object that supports all operations pydicom encoder plugins need"""
+    def __getattr__(self, name):
+        return self
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    def __getitem__(self, key):
+        return self
+
+    def __iter__(self):
+        return iter([])
+
+class MockModule:
+    """Mock module that provides mock encoders"""
+    def __getattr__(self, name):
+        return MockEncoder()
+
+# Pre-emptively add mock modules for optional pydicom encoders
+sys.modules['pydicom.encoders.gdcm'] = MockModule()
+sys.modules['pydicom.encoders.pylibjpeg'] = MockModule()
+sys.modules['pydicom.encoders.pyjpegls'] = MockModule()
+
+os.environ['PYDICOM_SILENCE_PLUGIN_WARNINGS'] = '1'
+
 import numpy as np
 from PIL import Image
 import pydicom
@@ -11,6 +43,36 @@ from pydicom.dataset import Dataset, FileDataset
 from pydicom.uid import generate_uid
 import datetime
 import os
+import sys
+import argparse
+
+
+def get_unique_filename(base_path):
+    """
+    Generate a unique filename by adding a numeric suffix if the file exists.
+
+    Args:
+        base_path: The desired output path (e.g., "image.dcm")
+
+    Returns:
+        A unique file path (e.g., "image.dcm", "image_1.dcm", "image_2.dcm", etc.)
+    """
+    if not os.path.exists(base_path):
+        return base_path
+
+    # Split the path into directory, basename, and extension
+    directory = os.path.dirname(base_path)
+    basename = os.path.basename(base_path)
+    name, ext = os.path.splitext(basename)
+
+    # Try incrementing numbers until we find a unique filename
+    counter = 1
+    while True:
+        new_name = f"{name}_{counter}{ext}"
+        new_path = os.path.join(directory, new_name) if directory else new_name
+        if not os.path.exists(new_path):
+            return new_path
+        counter += 1
 
 
 def png_to_dicom(png_path, dicom_path):
@@ -175,18 +237,67 @@ def png_to_dicom(png_path, dicom_path):
 
 
 if __name__ == "__main__":
-    # Use data folder structure
-    input_png = os.path.join("data", "input_png", "input.png")
-    output_dicom = os.path.join("data", "output_DICOM", "output.dcm")
+    # Set up argument parser
+    parser = argparse.ArgumentParser(
+        description="Convert PNG images to DICOM CT format",
+        epilog="Example: png_to_dicom.exe image.png"
+    )
+    parser.add_argument(
+        "input_png",
+        nargs='?',
+        help="Path to input PNG file"
+    )
+    parser.add_argument(
+        "-o", "--output",
+        help="Path to output DICOM file (optional, defaults to same name/location as input)"
+    )
 
-    # Ensure output directory exists
-    os.makedirs(os.path.dirname(output_dicom), exist_ok=True)
+    args = parser.parse_args()
 
-    # Check if input file exists
-    if not os.path.exists(input_png):
-        print(f"Error: Input file '{input_png}' not found!")
-        print(f"Please place a PNG file named 'input.png' in the '{os.path.dirname(input_png)}' directory.")
-        exit(1)
+    # If no arguments provided, use default data folder structure for backwards compatibility
+    if args.input_png is None:
+        input_png = os.path.join("data", "input_png", "input.png")
+        output_dicom = os.path.join("data", "output_DICOM", "output.dcm")
+
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_dicom), exist_ok=True)
+
+        # Check if input file exists
+        if not os.path.exists(input_png):
+            print(f"Error: No input file specified and default '{input_png}' not found!")
+            print(f"\nUsage: {os.path.basename(sys.argv[0])} <input.png> [-o output.dcm]")
+            print(f"\nExample: {os.path.basename(sys.argv[0])} image.png")
+            sys.exit(1)
+    else:
+        input_png = args.input_png
+
+        # Check if input file exists
+        if not os.path.exists(input_png):
+            print(f"Error: Input file '{input_png}' not found!")
+            sys.exit(1)
+
+        # Check if input is a PNG file
+        if not input_png.lower().endswith('.png'):
+            print(f"Error: Input file must be a PNG image (got: {input_png})")
+            sys.exit(1)
+
+        # Determine output path
+        if args.output:
+            output_dicom = args.output
+        else:
+            # Create output filename in same directory as input with .dcm extension
+            input_dir = os.path.dirname(input_png)
+            input_basename = os.path.basename(input_png)
+            output_basename = os.path.splitext(input_basename)[0] + ".dcm"
+            output_dicom = os.path.join(input_dir, output_basename) if input_dir else output_basename
+
+        # Ensure output directory exists
+        output_dir = os.path.dirname(output_dicom)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+
+        # Get unique filename if file already exists
+        output_dicom = get_unique_filename(output_dicom)
 
     try:
         png_to_dicom(input_png, output_dicom)
@@ -194,4 +305,4 @@ if __name__ == "__main__":
         print(f"Error during conversion: {str(e)}")
         import traceback
         traceback.print_exc()
-        exit(1)
+        sys.exit(1)
