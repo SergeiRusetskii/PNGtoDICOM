@@ -1,4 +1,7 @@
 # PNGtoDICOM
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Standalone converter for transforming PNG images to DICOM CT format
 
 ## Features
@@ -87,3 +90,9 @@ The converter adds standard CT DICOM parameters to simulate a single CT slice:
 ## Version History
 - **v1.0** (2025-11-19): Added command-line arguments, PyInstaller executable support, automatic unique filenames
 - **v0.x**: Initial implementation with hardcoded file paths
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 Sergei Rusetskii
