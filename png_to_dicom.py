@@ -49,17 +49,26 @@ def png_to_dicom(png_path, dicom_path):
     # Convert to numpy array
     pixel_array = np.array(png_image)
 
+    # Map PNG values (0-255) to HU range (-1000 to +3000)
+    # PNG 0 (black) -> 0 pixel value -> -1000 HU
+    # PNG 255 (white) -> 4000 pixel value -> +3000 HU
+    # Using RescaleIntercept=-1000 and RescaleSlope=1
+    # So we need pixel values from 0 to 4000
+    # Scale PNG 0-255 to pixel values 0-4000
+    # Use float conversion to avoid uint16 overflow, then convert to uint16
+    pixel_array_16bit = (pixel_array.astype(np.float32) * 4000.0 / 255.0).astype(np.uint16)
+
     # CT images are always grayscale (MONOCHROME2)
     rows, cols = pixel_array.shape
     samples_per_pixel = 1
     photometric_interpretation = "MONOCHROME2"
-    pixel_data = pixel_array
+    pixel_data = pixel_array_16bit
 
     # Create a new DICOM dataset
     file_meta = pydicom.Dataset()
     file_meta.MediaStorageSOPClassUID = '1.2.840.10008.5.1.4.1.1.2'  # CT Image Storage
     file_meta.MediaStorageSOPInstanceUID = generate_uid()
-    file_meta.TransferSyntaxUID = pydicom.uid.ExplicitVRLittleEndian
+    file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian  # Uncompressed
     file_meta.ImplementationClassUID = generate_uid()
 
     # Create the FileDataset instance
@@ -105,40 +114,40 @@ def png_to_dicom(png_path, dicom_path):
     ds.PhotometricInterpretation = photometric_interpretation
     ds.Rows = rows
     ds.Columns = cols
-    ds.BitsAllocated = 8
-    ds.BitsStored = 8
-    ds.HighBit = 7
+    ds.BitsAllocated = 16
+    ds.BitsStored = 16
+    ds.HighBit = 15
     ds.PixelRepresentation = 0  # Unsigned
 
-    # CT-specific parameters
-    ds.SliceThickness = "1.0"  # Slice thickness in mm
+    # CT-specific parameters (copied from example CT_1slice.dcm)
+    ds.SliceThickness = "1.5"  # Slice thickness in mm
     ds.KVP = "120"  # Peak kilovoltage output
-    ds.DataCollectionDiameter = "500"  # Data collection diameter in mm
+    ds.DataCollectionDiameter = "600.5"  # Data collection diameter in mm
 
     # Image position and orientation (patient coordinate system)
     # ImagePositionPatient: x, y, z coordinates of upper left corner (use strings for DS type)
-    ds.ImagePositionPatient = ["0.0", "0.0", "0.0"]
+    ds.ImagePositionPatient = ["-249.51171875", "-499.01171875", "138"]
     # ImageOrientationPatient: direction cosines of first row and first column
-    ds.ImageOrientationPatient = ["1.0", "0.0", "0.0", "0.0", "1.0", "0.0"]
+    ds.ImageOrientationPatient = ["1", "0", "0", "0", "1", "0"]
 
     # Pixel spacing: physical distance between pixel centers (row spacing, column spacing)
-    ds.PixelSpacing = ["1.0", "1.0"]  # 1mm x 1mm pixels
+    ds.PixelSpacing = ["0.9765625", "0.9765625"]  # From example CT
 
     # Slice location
-    ds.SliceLocation = "0.0"
+    ds.SliceLocation = "138"
 
     # Rescale parameters for Hounsfield Units (HU)
-    # Map PNG pixel values (0-255) to HU range that matches window display range
-    # Window center=40, width=400 means display range is -160 to 240 HU
+    # Map pixel values 0-4000 to HU range -1000 to +3000
     # HU = pixel_value * RescaleSlope + RescaleIntercept
-    ds.RescaleIntercept = "-160"  # Maps 0 to -160 HU
-    ds.RescaleSlope = "1.5686"  # Maps 255 to 240 HU (slope = 400/255)
+    # HU = pixel_value * 1 + (-1000)
+    ds.RescaleIntercept = "-1000"  # Minimum HU value
+    ds.RescaleSlope = "1"  # 1:1 mapping
     ds.RescaleType = "HU"
 
-    # Window settings for display
+    # Window settings for display (from example CT)
     # Standard soft tissue window
     ds.WindowCenter = "40"  # Center of window in HU
-    ds.WindowWidth = "400"  # Width of window in HU
+    ds.WindowWidth = "200"  # Width of window in HU
 
     # Required CT attributes
     ds.AcquisitionNumber = "1"
@@ -160,18 +169,23 @@ def png_to_dicom(png_path, dicom_path):
     print(f"Image type: Grayscale (MONOCHROME2)")
     print(f"Dimensions: {cols} x {rows}")
     print(f"Modality: CT (Computed Tomography)")
-    print(f"HU Range: -160 to 240 (mapped from pixel values 0-255)")
+    print(f"Bit depth: 16-bit (BitsAllocated={ds.BitsAllocated})")
+    print(f"Transfer Syntax: {file_meta.TransferSyntaxUID} (Uncompressed)")
+    print(f"HU Range: {int(ds.RescaleIntercept)} to {int(ds.RescaleIntercept) + 4000} (mapped from PNG 0-255)")
 
 
 if __name__ == "__main__":
-    # Hardcoded filenames
-    input_png = "input.png"
-    output_dicom = "output.dcm"
+    # Use data folder structure
+    input_png = os.path.join("data", "input_png", "input.png")
+    output_dicom = os.path.join("data", "output_DICOM", "output.dcm")
+
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(output_dicom), exist_ok=True)
 
     # Check if input file exists
     if not os.path.exists(input_png):
         print(f"Error: Input file '{input_png}' not found!")
-        print("Please place a PNG file named 'input.png' in the current directory.")
+        print(f"Please place a PNG file named 'input.png' in the '{os.path.dirname(input_png)}' directory.")
         exit(1)
 
     try:
